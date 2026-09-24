@@ -17,16 +17,16 @@ st.set_page_config(
 )
 
 
-st.title("🌾 Segmentation des graines de blé")
-st.subheader("Analyse par DBSCAN")
+# =====================================================
+# TITRE
+# =====================================================
 
+st.title("🌾 Segmentation des graines de blé avec DBSCAN")
 
 st.write(
     """
-    Cette application utilise le modèle DBSCAN entraîné
-    sur les données des graines de blé afin d'identifier
-    les différents groupes et les observations considérées
-    comme des anomalies.
+    Cette application présente les résultats du modèle
+    DBSCAN entraîné sur les données des graines de blé.
     """
 )
 
@@ -41,119 +41,59 @@ def load_model():
     return joblib.load("dbscan_wheat.pkl")
 
 
-@st.cache_data
-def load_data():
-
-    return joblib.load("wheat_data.pkl")
-
-
 try:
 
     dbscan_model = load_model()
-    x = load_data()
 
-    st.success("✅ Modèle DBSCAN et données chargés avec succès.")
+    st.success("✅ Modèle DBSCAN chargé avec succès !")
 
 except Exception as e:
 
     st.error(
-        f"❌ Erreur lors du chargement des fichiers : {e}"
+        f"❌ Erreur lors du chargement du modèle : {e}"
     )
 
     st.stop()
 
 
 # =====================================================
-# CONVERSION DES DONNEES
+# INFORMATIONS DU MODELE
 # =====================================================
 
-if isinstance(x, np.ndarray):
+st.header("⚙️ Paramètres du modèle")
 
-    features = [
-        "area A",
-        "perimeter",
-        "compactness",
-        "length of kernel",
-        "width of kernel",
-        "asymmetry coefficient",
-        "length of kernel groove"
-    ]
+col1, col2 = st.columns(2)
 
-    x = pd.DataFrame(
-        x,
-        columns=features
+with col1:
+
+    st.metric(
+        "eps",
+        dbscan_model.eps
+    )
+
+with col2:
+
+    st.metric(
+        "min_samples",
+        dbscan_model.min_samples
     )
 
 
 # =====================================================
-# INFORMATIONS SUR LE MODELE
+# LABELS DBSCAN
 # =====================================================
 
-st.sidebar.header("⚙️ Paramètres DBSCAN")
-
-st.sidebar.write(
-    f"**eps :** {dbscan_model.eps}"
-)
-
-st.sidebar.write(
-    f"**min_samples :** {dbscan_model.min_samples}"
-)
-
-st.sidebar.write(
-    f"**Nombre de variables :** {x.shape[1]}"
-)
-
-st.sidebar.write(
-    f"**Nombre d'observations :** {x.shape[0]}"
-)
-
-
-# =====================================================
-# APERCU DES DONNEES
-# =====================================================
-
-st.header("📋 Données des graines")
-
-st.dataframe(
-    x.head(10),
-    use_container_width=True
-)
-
-
-# =====================================================
-# CLUSTERING
-# =====================================================
-
-st.header("🔍 Analyse DBSCAN")
-
-
-# On récupère les labels du modèle déjà entraîné
 if hasattr(dbscan_model, "labels_"):
 
     labels = dbscan_model.labels_
 
 else:
 
-    labels = dbscan_model.fit_predict(
-        x.values
-    )
-
-
-# Vérification
-if len(labels) != len(x):
-
-    st.error(
-        "Le nombre de labels ne correspond pas "
-        "au nombre d'observations."
+    st.warning(
+        "Le modèle ne contient pas les labels d'entraînement."
     )
 
     st.stop()
-
-
-# Ajouter les clusters
-results_df = x.copy()
-
-results_df["Cluster"] = labels
 
 
 # =====================================================
@@ -166,10 +106,12 @@ number_clusters = len(
     set(labels)
 ) - (1 if -1 in labels else 0)
 
-
 number_anomalies = int(
     np.sum(labels == -1)
 )
+
+
+st.header("📊 Résultats du clustering")
 
 
 col1, col2, col3 = st.columns(3)
@@ -178,7 +120,7 @@ col1, col2, col3 = st.columns(3)
 with col1:
 
     st.metric(
-        "🌾 Nombre de graines",
+        "🌾 Observations",
         number_observations
     )
 
@@ -186,7 +128,7 @@ with col1:
 with col2:
 
     st.metric(
-        "🔵 Nombre de clusters",
+        "🔵 Clusters",
         number_clusters
     )
 
@@ -203,7 +145,7 @@ with col3:
 # REPARTITION DES CLUSTERS
 # =====================================================
 
-st.header("📊 Répartition des clusters")
+st.header("📈 Répartition des clusters")
 
 
 cluster_counts = (
@@ -213,102 +155,30 @@ cluster_counts = (
 )
 
 
-cluster_counts_df = pd.DataFrame({
+results = pd.DataFrame({
 
     "Cluster":
-        cluster_counts.index.astype(str),
+        cluster_counts.index,
 
-    "Nombre de graines":
+    "Nombre d'observations":
         cluster_counts.values
 
 })
 
 
 st.dataframe(
-    cluster_counts_df,
+    results,
     use_container_width=True,
     hide_index=True
 )
 
 
 # =====================================================
-# GRAPHIQUE DES CLUSTERS
+# GRAPHIQUE
 # =====================================================
 
-fig_bar = px.bar(
-
-    cluster_counts_df,
-
-    x="Cluster",
-
-    y="Nombre de graines",
-
-    text="Nombre de graines",
-
-    title="Répartition des graines par cluster"
-
-)
-
-
-st.plotly_chart(
-    fig_bar,
-    use_container_width=True
-)
-
-
-# =====================================================
-# PCA
-# =====================================================
-
-st.header("📍 Visualisation des clusters")
-
-
-pca = PCA(
-    n_components=2
-)
-
-
-x_pca = pca.fit_transform(
-    x.values
-)
-
-
-pca_df = pd.DataFrame({
-
-    "PC 1":
-        x_pca[:, 0],
-
-    "PC 2":
-        x_pca[:, 1],
-
-    "Cluster":
-        labels.astype(str)
-
-})
-
-
-fig_pca = px.scatter(
-
-    pca_df,
-
-    x="PC 1",
-
-    y="PC 2",
-
-    color="Cluster",
-
-    title="Visualisation des clusters DBSCAN",
-
-    hover_data=[
-        "Cluster"
-    ]
-
-)
-
-
-st.plotly_chart(
-    fig_pca,
-    use_container_width=True
+st.bar_chart(
+    results.set_index("Cluster")
 )
 
 
@@ -316,23 +186,14 @@ st.plotly_chart(
 # ANOMALIES
 # =====================================================
 
-st.header("⚠️ Anomalies détectées")
+st.header("⚠️ Détection des anomalies")
 
 
-anomalies_df = results_df[
-    results_df["Cluster"] == -1
-]
-
-
-if len(anomalies_df) > 0:
+if number_anomalies > 0:
 
     st.warning(
-        f"{len(anomalies_df)} anomalie(s) détectée(s)."
-    )
-
-    st.dataframe(
-        anomalies_df,
-        use_container_width=True
+        f"{number_anomalies} observation(s) ont été "
+        "identifiées comme anomalies par DBSCAN."
     )
 
 else:
@@ -343,47 +204,48 @@ else:
 
 
 # =====================================================
-# RESULTATS COMPLETS
+# LABELS
 # =====================================================
 
-st.header("📋 Résultats complets")
+st.header("🔍 Labels attribués par DBSCAN")
+
+
+labels_df = pd.DataFrame({
+
+    "Observation":
+        range(1, len(labels) + 1),
+
+    "Cluster":
+        labels
+
+})
 
 
 st.dataframe(
-    results_df,
-    use_container_width=True
+    labels_df,
+    use_container_width=True,
+    hide_index=True
 )
 
 
 # =====================================================
-# TELECHARGEMENT
+# INTERPRETATION
 # =====================================================
 
-csv_results = results_df.to_csv(
-    index=False
-).encode("utf-8")
+st.header("ℹ️ Interprétation")
 
-
-st.download_button(
-
-    label="⬇️ Télécharger les résultats",
-
-    data=csv_results,
-
-    file_name="resultats_dbscan_wheat.csv",
-
-    mime="text/csv"
-
-)
-
-
-# =====================================================
-# INFORMATIONS
-# =====================================================
-
-st.info(
+st.write(
     """
-    ℹ️ Dans DBSCAN, les observations appartenant au cluster
-    -1 sont considérées comme des points aberrants ou des anomalies.
+    Dans DBSCAN :
+
+    • Les valeurs positives correspondent aux différents clusters.
+
+    • La valeur -1 correspond aux observations considérées
+      comme des anomalies ou des points aberrants.
+
+    • Le paramètre eps contrôle le voisinage utilisé par DBSCAN.
+
+    • Le paramètre min_samples définit le nombre minimum
+      de points nécessaires pour former une région dense.
     """
 )
